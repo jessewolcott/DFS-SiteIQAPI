@@ -353,6 +353,7 @@ Every script accepts an optional `-Credential` parameter; if omitted it loads fr
 | [12-AlertDrillDown.ps1](POSH-Examples/12-AlertDrillDown.ps1) | Flatten alerts, top error types, still-open alerts, hot fueling positions |
 | [13-GetAllAlerts.ps1](POSH-Examples/13-GetAllAlerts.ps1) | Pull every alert across all tickets and display as a flat, sorted table |
 | [14-GetOpenAlerts.ps1](POSH-Examples/14-GetOpenAlerts.ps1) | Pull only unresolved (still-open) alerts, sorted by site |
+| [15-GetOpenAlerts-Raw.ps1](POSH-Examples/15-GetOpenAlerts-Raw.ps1) | Same as above using raw `Invoke-WebRequest` — no module required |
 
 ---
 
@@ -500,3 +501,4 @@ python pyExamples/01_basic_connection.py
 | [12_alert_drill_down.py](pyExamples/12_alert_drill_down.py) | Flatten alerts, top error types, still-open alerts, hot fueling positions |
 | [13_get_all_alerts.py](pyExamples/13_get_all_alerts.py) | Pull every alert across all tickets and display as a flat formatted table |
 | [14_get_open_alerts.py](pyExamples/14_get_open_alerts.py) | Pull only unresolved (still-open) alerts, sorted by site |
+| [15_get_open_alerts_raw.py](pyExamples/15_get_open_alerts_raw.py) | Same as above using `requests` directly — no pySiteIQ module required |
