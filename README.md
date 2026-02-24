@@ -9,6 +9,8 @@ API clients for the **DFS Site-IQ Tickets External API** in two languages:
 
 Example scripts for each live in [`POSH-Examples/`](POSH-Examples/) and [`pyExamples/`](pyExamples/).
 
+Interactive API documentation (Swagger UI) is in [`docs/index.html`](docs/index.html) — open it in any browser, no server required.
+
 **API base URL:** `https://dfs.site-iq.com`
 
 ---
@@ -21,12 +23,13 @@ Example scripts for each live in [`POSH-Examples/`](POSH-Examples/) and [`pyExam
 2. [Data Structures](#data-structures)
    - [Ticket](#ticket-object)
    - [Alert](#alert-object)
-3. [POSH-SiteIQ — PowerShell Module](#posh-siteiq--powershell-module)
+3. [API Documentation (Swagger UI)](#api-documentation-swagger-ui)
+4. [POSH-SiteIQ — PowerShell Module](#posh-siteiq--powershell-module)
    - [Installation](#installation)
    - [Credential Storage](#credential-storage)
    - [Cmdlet Reference](#cmdlet-reference)
    - [Examples](#examples)
-4. [pySiteIQ — Python Module](#pysiteiq--python-module)
+5. [pySiteIQ — Python Module](#pysiteiq--python-module)
    - [Installation](#installation-1)
    - [Credential Storage](#credential-storage-1)
    - [API Reference](#api-reference)
@@ -195,6 +198,15 @@ An array of [Ticket](#ticket-object) objects:
 
 ---
 
+## API Documentation (Swagger UI)
+
+An interactive Swagger UI is included at [`docs/index.html`](docs/index.html). Open it directly in any browser — it works from the local filesystem without a web server because the OpenAPI spec is embedded inline.
+
+- Click **Authorize** (lock icon) and paste a bearer token obtained from the auth endpoint to enable **Try it out** on the ticket endpoint.
+- The raw OpenAPI 3.0 spec is at [`docs/openapi.yaml`](docs/openapi.yaml) and can be imported into Postman, Insomnia, or any other OpenAPI-aware tool.
+
+---
+
 ## POSH-SiteIQ — PowerShell Module
 
 ### Installation
@@ -339,6 +351,7 @@ Every script accepts an optional `-Credential` parameter; if omitted it loads fr
 | [10-FullWorkflow.ps1](POSH-Examples/10-FullWorkflow.ps1) | Weekly report: fetch, summarize by site and component, export CSV |
 | [11-StoredCredential.ps1](POSH-Examples/11-StoredCredential.ps1) | DPAPI credential file demo — create once, reuse silently |
 | [12-AlertDrillDown.ps1](POSH-Examples/12-AlertDrillDown.ps1) | Flatten alerts, top error types, still-open alerts, hot fueling positions |
+| [13-GetAllAlerts.ps1](POSH-Examples/13-GetAllAlerts.ps1) | Pull every alert across all tickets and display as a flat, sorted table |
 
 ---
 
@@ -351,14 +364,19 @@ pip install requests          # required
 pip install keyring           # optional — enables persistent credential storage
 ```
 
-Or from the requirements files:
+Or from the requirements file:
 
 ```bash
-pip install -r pySiteIQ/requirements.txt
 pip install -r pyExamples/requirements.txt
 ```
 
 Requires **Python 3.9+**.
+
+> **Note:** All example scripts include a dependency guard at the top. If `requests` (or any other required package) is missing you will see a clear message instead of a traceback:
+> ```
+> Missing dependency: No module named 'requests'
+> Run: pip install -r requirements.txt
+> ```
 
 ### Credential Storage
 
@@ -479,3 +497,4 @@ python pyExamples/01_basic_connection.py
 | [10_full_workflow.py](pyExamples/10_full_workflow.py) | Weekly report: fetch, summarize, export timestamped CSV |
 | [11_stored_credential.py](pyExamples/11_stored_credential.py) | Keychain credential demo — prompt once, reuse silently |
 | [12_alert_drill_down.py](pyExamples/12_alert_drill_down.py) | Flatten alerts, top error types, still-open alerts, hot fueling positions |
+| [13_get_all_alerts.py](pyExamples/13_get_all_alerts.py) | Pull every alert across all tickets and display as a flat formatted table |
