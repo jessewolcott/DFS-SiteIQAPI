@@ -1,0 +1,101 @@
+FORMAT: 1A
+HOST: https://dfs.site-iq.com
+
+# Site IQ Tickets External API
+
+Tickets authentication and ticket retrieval APIs.
+
+## Authentication [/api/web/auth/token]
+
+### Get Token [POST]
+
+Obtain a bearer token using user credentials.
+
++ Request (application/json)
+
+    + Attributes
+        + email: user@example.com (string, required) - User email address
+        + password: ExamplePass123 (string, required) - User password
+
++ Response 200 (application/json)
+
+    + Attributes
+        + token: eyhuyvgvufxtr... (string) - Bearer token
+
++ Response 401
+
++ Response 403
+
++ Response 500
+
+---
+
+# Group Tickets
+
+Ticket status and listing.
+
+## Tickets [/api/external/ticket{?status,startDate,endDate,delta,pageLimit,pageOffset}]
+
++ Parameters
+    + status: InProgress (optional, string)
+        + Members: InProgress, Closed, `Pending Closed`, Dispatch, All
+        + Default: InProgress
+    + startDate: `2025-08-01` (optional, string) - YYYY-MM-DD, defaults to 30 days ago
+    + endDate: `2025-08-31` (optional, string) - YYYY-MM-DD, defaults to now
+    + delta: 1691179200 (optional, number) - Epoch time, overrides startDate/endDate
+    + pageLimit: 1000 (optional, number) - 1–1000, default 1000
+    + pageOffset: 0 (optional, number) - 0–N, default 0
+
+### List Tickets [GET]
+
+Returns tickets for user-accessible sites for the last 30 days.
+
++ Request
+
+    + Headers
+
+            Authorization: Bearer {token}
+            Accept: */*
+
++ Response 200 (application/json)
+
+    + Attributes (array[Ticket])
+
++ Response 400
+
+    Number of days is required and should be less than or equal to 7.
+
++ Response 401
+
++ Response 403
+
++ Response 500
+
+---
+
+# Data Structures
+
+## Alert (object)
+
++ error: communication error (string) - Description of the alert
++ fuelingPosition: 9 (number) - Fueling point
++ alertOpenTimestamp: `2025-08-05 11:42:08` (string)
++ alertCloseTimestamp: `2025-08-06 11:23:11` (string, nullable)
+
+## Ticket (object)
+
++ ticketID: 12345 (number) - Unique ticket number
++ ticketOpenTimestamp: `2025-08-05 11:48:19` (string)
++ siteID: 123456 (string)
++ siteName: Trial #376 (string)
++ companyName: Demo Company (string)
++ address: 123 Main St, City, ST (string)
++ integrationID1: Id1 (string)
++ integrationID2: Id2 (string)
++ integrationID3: Id3 (string)
++ warrantyDate: `2025-09-29` (string, nullable)
++ warrantyStatus: In (string) - In or Out of warranty
++ dispenser: 9/10 (string)
++ ticketStatus: open (string)
++ component: Printer (string)
++ alerts (array[Alert])

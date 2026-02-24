@@ -1,0 +1,87 @@
+{
+  "TokenRequest": {
+    "type": "object",
+    "required": ["email", "password"],
+    "properties": {
+      "email": { "type": "string", "description": "User email address" },
+      "password": { "type": "string", "description": "User password" }
+    }
+  },
+  "TokenResponse": {
+    "type": "object",
+    "properties": {
+      "token": { "type": "string", "description": "Bearer token" }
+    }
+  },
+  "TicketQuery": {
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string",
+        "enum": ["InProgress", "Closed", "Pending Closed", "Dispatch", "All"],
+        "default": "InProgress"
+      },
+      "startDate": {
+        "type": "string",
+        "format": "date",
+        "description": "YYYY-MM-DD, defaults to last 30 days window start"
+      },
+      "endDate": {
+        "type": "string",
+        "format": "date",
+        "description": "YYYY-MM-DD, defaults to now"
+      },
+      "delta": {
+        "type": "number",
+        "description": "Epoch time; overrides startDate and endDate when provided"
+      },
+      "pageLimit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 1000,
+        "default": 1000
+      },
+      "pageOffset": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 0
+      }
+    }
+  },
+  "Alert": {
+    "type": "object",
+    "properties": {
+      "error": { "type": "string" },
+      "fuelingPosition": { "type": "number" },
+      "alertOpenTimestamp": { "type": "string" },
+      "alertCloseTimestamp": { "type": ["string", "null"] }
+    }
+  },
+  "Ticket": {
+    "type": "object",
+    "properties": {
+      "ticketID": { "type": "number" },
+      "ticketOpenTimestamp": { "type": "string" },
+      "siteID": { "type": "string" },
+      "siteName": { "type": "string" },
+      "companyName": { "type": "string" },
+      "address": { "type": "string" },
+      "integrationID1": { "type": "string" },
+      "integrationID2": { "type": "string" },
+      "integrationID3": { "type": "string" },
+      "warrantyDate": { "type": ["string", "null"] },
+      "warrantyStatus": { "type": "string" },
+      "dispenser": { "type": "string" },
+      "ticketStatus": { "type": "string" },
+      "component": { "type": "string" },
+      "alerts": {
+        "type": "array",
+        "items": { "$ref": "#/Alert" }
+      }
+    }
+  },
+  "TicketListResponse": {
+    "type": "array",
+    "items": { "$ref": "#/Ticket" }
+  }
+}

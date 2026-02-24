@@ -1,0 +1,14 @@
+# Encrypted credential files (default path is $env:USERPROFILE, but ignore any that land in the repo)
+*.cred.xml
+.siteiq-cred.xml
+
+# Generated output files from example scripts (07-ExportToCsv, 10-FullWorkflow)
+POSH-Examples/*.csv
+pyExamples/*.csv
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+Desktop.ini
