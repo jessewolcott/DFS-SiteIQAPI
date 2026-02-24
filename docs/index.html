@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Site IQ API Docs</title>
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
+  <style>
+    body { margin: 0; padding: 0; }
+  </style>
+</head>
+<body>
+<div id="swagger-ui"></div>
+
+<script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+<script>
+// OpenAPI spec embedded inline so the page works from the local filesystem
+// without a web server (avoids browser CORS/file:// fetch restrictions).
+const spec = {
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Site IQ Tickets External API",
+    "version": "1.0",
+    "description": "Tickets authentication and ticket retrieval APIs for the DFS Site IQ platform.\n\nAuthentication uses a short-lived Bearer token obtained from `/api/web/auth/token`. Pass it as `Authorization: Bearer <token>` on all ticket endpoints."
+  },
+  "servers": [{ "url": "https://dfs.site-iq.com" }],
+  "paths": {
+    "/api/web/auth/token": {
+      "post": {
+        "summary": "Get Token",
+        "description": "Obtain a bearer token using user credentials.",
+        "tags": ["Authentication"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TokenRequest" },
+              "example": { "email": "user@example.com", "password": "ExamplePass123" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Token issued successfully",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TokenResponse" } } }
+          },
+          "401": { "description": "Invalid credentials" },
+          "403": { "description": "Forbidden" },
+          "500": { "description": "Internal server error" }
+        }
+      }
+    },
+    "/api/external/ticket": {
+      "get": {
+        "summary": "List Tickets",
+        "description": "Returns tickets for all sites accessible to the authenticated user. Defaults to the last 30 days and `InProgress` status if no filters are supplied.",
+        "tags": ["Tickets"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "status", "in": "query", "description": "Filter by ticket status",
+            "schema": { "type": "string", "enum": ["InProgress","Closed","Pending Closed","Dispatch","All"], "default": "InProgress" }
+          },
+          {
+            "name": "startDate", "in": "query", "description": "Start of date window (YYYY-MM-DD). Defaults to 30 days ago.",
+            "schema": { "type": "string", "format": "date", "example": "2025-08-01" }
+          },
+          {
+            "name": "endDate", "in": "query", "description": "End of date window (YYYY-MM-DD). Defaults to now.",
+            "schema": { "type": "string", "format": "date", "example": "2025-08-31" }
+          },
+          {
+            "name": "delta", "in": "query", "description": "Epoch timestamp. When supplied, overrides startDate and endDate.",
+            "schema": { "type": "integer", "example": 1691179200 }
+          },
+          {
+            "name": "pageLimit", "in": "query", "description": "Number of results per page (1–1000).",
+            "schema": { "type": "integer", "minimum": 1, "maximum": 1000, "default": 1000 }
+          },
+          {
+            "name": "pageOffset", "in": "query", "description": "Zero-based page offset.",
+            "schema": { "type": "integer", "minimum": 0, "default": 0 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Array of matching tickets",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Ticket" } } } }
+          },
+          "400": { "description": "Invalid request (e.g. date range exceeds 7 days)" },
+          "401": { "description": "Unauthorized — missing or expired token" },
+          "403": { "description": "Forbidden" },
+          "500": { "description": "Internal server error" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": { "type": "http", "scheme": "bearer", "description": "Obtain a token from POST /api/web/auth/token and supply it here." }
+    },
+    "schemas": {
+      "TokenRequest": {
+        "type": "object", "required": ["email","password"],
+        "properties": {
+          "email":    { "type": "string", "format": "email",    "description": "User email address", "example": "user@example.com" },
+          "password": { "type": "string", "format": "password", "description": "User password",       "example": "ExamplePass123" }
+        }
+      },
+      "TokenResponse": {
+        "type": "object",
+        "properties": { "token": { "type": "string", "description": "Bearer token", "example": "eyhuyvgvufxtr..." } }
+      },
+      "Alert": {
+        "type": "object",
+        "properties": {
+          "error":               { "type": "string",  "description": "Description of the alert",                          "example": "communication error" },
+          "fuelingPosition":     { "type": "number",  "description": "Fueling point number",                              "example": 9 },
+          "alertOpenTimestamp":  { "type": "string",  "description": "When the alert was raised (YYYY-MM-DD HH:MM:SS)",   "example": "2025-08-05 11:42:08" },
+          "alertCloseTimestamp": { "type": "string",  "nullable": true, "description": "When the alert was resolved; null if still open", "example": "2025-08-06 11:23:11" }
+        }
+      },
+      "Ticket": {
+        "type": "object",
+        "properties": {
+          "ticketID":             { "type": "integer", "description": "Unique ticket number",                       "example": 12345 },
+          "ticketOpenTimestamp":  { "type": "string",  "description": "Ticket creation time (YYYY-MM-DD HH:MM:SS)", "example": "2025-08-05 11:48:19" },
+          "siteID":               { "type": "string",  "example": "123456" },
+          "siteName":             { "type": "string",  "example": "Trial #376" },
+          "companyName":          { "type": "string",  "example": "Demo Company" },
+          "address":              { "type": "string",  "example": "123 Main St, City, ST" },
+          "integrationID1":       { "type": "string" },
+          "integrationID2":       { "type": "string" },
+          "integrationID3":       { "type": "string" },
+          "warrantyDate":         { "type": "string",  "nullable": true, "description": "Warranty expiration date (YYYY-MM-DD)", "example": "2025-09-29" },
+          "warrantyStatus":       { "type": "string",  "description": "In = under warranty, Out = expired", "enum": ["In","Out"], "example": "In" },
+          "dispenser":            { "type": "string",  "example": "9/10" },
+          "ticketStatus":         { "type": "string",  "example": "open" },
+          "component":            { "type": "string",  "example": "Printer" },
+          "alerts":               { "type": "array",   "items": { "$ref": "#/components/schemas/Alert" } }
+        }
+      }
+    }
+  }
+};
+
+window.onload = () => {
+  SwaggerUIBundle({
+    spec,
+    dom_id: '#swagger-ui',
+    presets: [SwaggerUIBundle.presets.apis, SwaggerUIBundle.SwaggerUIStandalonePreset],
+    layout: 'BaseLayout',
+    deepLinking: true,
+    docExpansion: 'full',
+    defaultModelsExpandDepth: 2,
+    tryItOutEnabled: true,
+  });
+};
+</script>
+</body>
+</html>
