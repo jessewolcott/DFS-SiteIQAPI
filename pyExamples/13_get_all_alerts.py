@@ -1,9 +1,8 @@
-# Flatten nested alerts to find error patterns across sites
+# Retrieve every alert across all tickets and display them as a flat list
 import pathlib, sys
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 
-from collections import Counter
 try:
     from pySiteIQ import SiteIQClient
 except ModuleNotFoundError as e:
@@ -33,22 +32,18 @@ for t in tickets:
 
 print(f'Total alerts: {len(all_alerts)}\n')
 
-# Top 10 error types
-print('Top 10 error types:')
-error_counts = Counter(a['Error'] for a in all_alerts)
-for error, count in error_counts.most_common(10):
-    print(f'  {count:>5}  {error}')
+header = f"{'TicketID':>10}  {'SiteName':<20}  {'Component':<15}  {'Dispenser':<10}  {'FP':>3}  {'StillOpen':<9}  {'AlertOpened':<19}  Error"
+print(header)
+print('-' * len(header))
 
-print()
-
-# Still-open alerts
-open_alerts = [a for a in all_alerts if a['StillOpen']]
-print(f'Still open: {len(open_alerts)}\n')
-
-# Fueling positions with 5+ alerts
-print('Fueling positions with 5+ alerts:')
-by_position = Counter(str(a['FuelingPosition']) for a in all_alerts if a['FuelingPosition'] is not None)
-for pos, count in by_position.most_common():
-    if count < 5:
-        break
-    print(f'  {count:>5}  position {pos}')
+for a in all_alerts:
+    print(
+        f"{a['TicketID']:>10}  "
+        f"{str(a['SiteName'] or ''):<20}  "
+        f"{str(a['Component'] or ''):<15}  "
+        f"{str(a['Dispenser'] or ''):<10}  "
+        f"{str(a['FuelingPosition'] or ''):>3}  "
+        f"{str(a['StillOpen']):<9}  "
+        f"{str(a['AlertOpened'] or ''):<19}  "
+        f"{a['Error'] or ''}"
+    )

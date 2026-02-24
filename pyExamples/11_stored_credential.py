@@ -7,7 +7,10 @@ import pathlib, sys
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 
-from pySiteIQ import SiteIQClient
+try:
+    from pySiteIQ import SiteIQClient
+except ModuleNotFoundError as e:
+    sys.exit(f'Missing dependency: {e}\nRun: pip install -r requirements.txt')
 from _creds import get_credential
 
 # First run: prompts and saves to keychain.
