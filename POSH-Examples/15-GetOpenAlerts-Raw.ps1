@@ -82,5 +82,5 @@ foreach ($alert in $openAlerts) {
 }
 
 $NoTransaction | Sort-Object SiteName
-$LowFlow       | Sort-Object SiteName
+$LowFlow       | Sort-Object SiteName | ft 
 $Unclassified  | Sort-Object SiteName

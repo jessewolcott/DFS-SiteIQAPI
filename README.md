@@ -337,23 +337,38 @@ if (-not (Test-SiteIQConnection)) { Connect-SiteIQ -Credential (Get-Credential) 
 
 Every script accepts an optional `-Credential` parameter; if omitted it loads from `~/.siteiq-cred.xml` on Windows or prompts on macOS/Linux.
 
+Scripts marked **Raw** use `Invoke-WebRequest` directly — no module required.
+
 | Script | Description |
 |--------|-------------|
 | [01-BasicConnection.ps1](POSH-Examples/01-BasicConnection.ps1) | Connect, verify with `Test-SiteIQConnection`, disconnect |
+| [01-BasicConnection-Raw.ps1](POSH-Examples/01-BasicConnection-Raw.ps1) | Same using raw `Invoke-WebRequest` |
 | [02-GetInProgressTickets.ps1](POSH-Examples/02-GetInProgressTickets.ps1) | Fetch open tickets and display a summary table |
+| [02-GetInProgressTickets-Raw.ps1](POSH-Examples/02-GetInProgressTickets-Raw.ps1) | Same using raw `Invoke-WebRequest` |
 | [03-GetClosedTickets.ps1](POSH-Examples/03-GetClosedTickets.ps1) | 20 most-recently-closed tickets, sorted newest first |
+| [03-GetClosedTickets-Raw.ps1](POSH-Examples/03-GetClosedTickets-Raw.ps1) | Same using raw `Invoke-WebRequest` |
 | [04-DateRangeQuery.ps1](POSH-Examples/04-DateRangeQuery.ps1) | Fixed date window and rolling last-7-days queries |
+| [04-DateRangeQuery-Raw.ps1](POSH-Examples/04-DateRangeQuery-Raw.ps1) | Same using raw `Invoke-WebRequest` |
 | [05-Pagination.ps1](POSH-Examples/05-Pagination.ps1) | Manual pagination loop vs automatic `-All` switch |
+| [05-Pagination-Raw.ps1](POSH-Examples/05-Pagination-Raw.ps1) | Same using raw `Invoke-WebRequest` |
 | [06-DeltaSync.ps1](POSH-Examples/06-DeltaSync.ps1) | Incremental sync via epoch timestamp — good for scheduled jobs |
+| [06-DeltaSync-Raw.ps1](POSH-Examples/06-DeltaSync-Raw.ps1) | Same using raw `Invoke-WebRequest` |
 | [07-ExportToCsv.ps1](POSH-Examples/07-ExportToCsv.ps1) | Flatten nested alerts and export all tickets to CSV |
+| [07-ExportToCsv-Raw.ps1](POSH-Examples/07-ExportToCsv-Raw.ps1) | Same using raw `Invoke-WebRequest` |
 | [08-FilterAndGroup.ps1](POSH-Examples/08-FilterAndGroup.ps1) | Group by component/site, find high-alert tickets, find today's tickets |
+| [08-FilterAndGroup-Raw.ps1](POSH-Examples/08-FilterAndGroup-Raw.ps1) | Same using raw `Invoke-WebRequest` |
 | [09-WarrantyReport.ps1](POSH-Examples/09-WarrantyReport.ps1) | In/out warranty split, expiring-soon warning, out-of-warranty by site |
+| [09-WarrantyReport-Raw.ps1](POSH-Examples/09-WarrantyReport-Raw.ps1) | Same using raw `Invoke-WebRequest` |
 | [10-FullWorkflow.ps1](POSH-Examples/10-FullWorkflow.ps1) | Weekly report: fetch, summarize by site and component, export CSV |
+| [10-FullWorkflow-Raw.ps1](POSH-Examples/10-FullWorkflow-Raw.ps1) | Same using raw `Invoke-WebRequest` |
 | [11-StoredCredential.ps1](POSH-Examples/11-StoredCredential.ps1) | DPAPI credential file demo — create once, reuse silently |
+| [11-StoredCredential-Raw.ps1](POSH-Examples/11-StoredCredential-Raw.ps1) | Same using raw `Invoke-WebRequest` |
 | [12-AlertDrillDown.ps1](POSH-Examples/12-AlertDrillDown.ps1) | Flatten alerts, top error types, still-open alerts, hot fueling positions |
+| [12-AlertDrillDown-Raw.ps1](POSH-Examples/12-AlertDrillDown-Raw.ps1) | Same using raw `Invoke-WebRequest` |
 | [13-GetAllAlerts.ps1](POSH-Examples/13-GetAllAlerts.ps1) | Pull every alert across all tickets and display as a flat, sorted table |
+| [13-GetAllAlerts-Raw.ps1](POSH-Examples/13-GetAllAlerts-Raw.ps1) | Same using raw `Invoke-WebRequest` |
 | [14-GetOpenAlerts.ps1](POSH-Examples/14-GetOpenAlerts.ps1) | Pull only unresolved (still-open) alerts, sorted by site |
-| [15-GetOpenAlerts-Raw.ps1](POSH-Examples/15-GetOpenAlerts-Raw.ps1) | Same as above using raw `Invoke-WebRequest` — no module required |
+| [15-GetOpenAlerts-Raw.ps1](POSH-Examples/15-GetOpenAlerts-Raw.ps1) | Same using raw `Invoke-WebRequest` — with error-type classification |
 
 ---
 
@@ -485,20 +500,35 @@ Run examples from the repo root:
 python pyExamples/01_basic_connection.py
 ```
 
+Scripts marked **Raw** use `requests` directly — no pySiteIQ module required.
+
 | Script | Description |
 |--------|-------------|
 | [01_basic_connection.py](pyExamples/01_basic_connection.py) | Connect, check `is_connected()`, disconnect |
+| [01_basic_connection_raw.py](pyExamples/01_basic_connection_raw.py) | Same using `requests` directly |
 | [02_get_in_progress_tickets.py](pyExamples/02_get_in_progress_tickets.py) | Fetch open tickets and print a formatted table |
+| [02_get_in_progress_tickets_raw.py](pyExamples/02_get_in_progress_tickets_raw.py) | Same using `requests` directly |
 | [03_get_closed_tickets.py](pyExamples/03_get_closed_tickets.py) | 20 most-recently-closed tickets, sorted newest first |
+| [03_get_closed_tickets_raw.py](pyExamples/03_get_closed_tickets_raw.py) | Same using `requests` directly |
 | [04_date_range_query.py](pyExamples/04_date_range_query.py) | Fixed date window and rolling last-7-days queries |
+| [04_date_range_query_raw.py](pyExamples/04_date_range_query_raw.py) | Same using `requests` directly |
 | [05_pagination.py](pyExamples/05_pagination.py) | Manual pagination loop vs `all_pages=True` |
+| [05_pagination_raw.py](pyExamples/05_pagination_raw.py) | Same using `requests` directly |
 | [06_delta_sync.py](pyExamples/06_delta_sync.py) | Incremental sync via epoch timestamp |
+| [06_delta_sync_raw.py](pyExamples/06_delta_sync_raw.py) | Same using `requests` directly |
 | [07_export_to_csv.py](pyExamples/07_export_to_csv.py) | Flatten tickets to CSV using `csv.DictWriter` |
+| [07_export_to_csv_raw.py](pyExamples/07_export_to_csv_raw.py) | Same using `requests` directly |
 | [08_filter_and_group.py](pyExamples/08_filter_and_group.py) | Group by component/site using `Counter`, find high-alert tickets |
+| [08_filter_and_group_raw.py](pyExamples/08_filter_and_group_raw.py) | Same using `requests` directly |
 | [09_warranty_report.py](pyExamples/09_warranty_report.py) | In/out warranty split, expiring-soon list, out-of-warranty by site |
+| [09_warranty_report_raw.py](pyExamples/09_warranty_report_raw.py) | Same using `requests` directly |
 | [10_full_workflow.py](pyExamples/10_full_workflow.py) | Weekly report: fetch, summarize, export timestamped CSV |
+| [10_full_workflow_raw.py](pyExamples/10_full_workflow_raw.py) | Same using `requests` directly |
 | [11_stored_credential.py](pyExamples/11_stored_credential.py) | Keychain credential demo — prompt once, reuse silently |
+| [11_stored_credential_raw.py](pyExamples/11_stored_credential_raw.py) | Same using `requests` directly |
 | [12_alert_drill_down.py](pyExamples/12_alert_drill_down.py) | Flatten alerts, top error types, still-open alerts, hot fueling positions |
+| [12_alert_drill_down_raw.py](pyExamples/12_alert_drill_down_raw.py) | Same using `requests` directly |
 | [13_get_all_alerts.py](pyExamples/13_get_all_alerts.py) | Pull every alert across all tickets and display as a flat formatted table |
+| [13_get_all_alerts_raw.py](pyExamples/13_get_all_alerts_raw.py) | Same using `requests` directly |
 | [14_get_open_alerts.py](pyExamples/14_get_open_alerts.py) | Pull only unresolved (still-open) alerts, sorted by site |
-| [15_get_open_alerts_raw.py](pyExamples/15_get_open_alerts_raw.py) | Same as above using `requests` directly — no pySiteIQ module required |
+| [15_get_open_alerts_raw.py](pyExamples/15_get_open_alerts_raw.py) | Same using `requests` directly — with error-type classification |
