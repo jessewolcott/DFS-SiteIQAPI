@@ -1,59 +1,53 @@
-# Pipeline filtering and grouping using raw Invoke-WebRequest — no module required
-$baseUri = 'https://dfs.site-iq.com'
+#Requires -Version 5.1
+# Pipeline filtering and grouping — no module required
+[CmdletBinding()]
+param(
+    [PSCredential] $Credential,
+    [string]       $BaseUri = 'https://dfs.site-iq.com'
+)
 
-# Credentials
-$email    = Read-Host 'Site-IQ email'
-$password = Read-Host 'Password' -AsSecureString
-$plainPw  = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
-                [Runtime.InteropServices.Marshal]::SecureStringToBSTR($password))
+$ErrorActionPreference = 'Stop'
 
-# Authenticate
-$authBody = @{ email = $email; password = $plainPw } | ConvertTo-Json
-$authResp  = Invoke-WebRequest -Uri "$baseUri/api/web/auth/token" `
-                               -Method Post `
-                               -ContentType 'application/json' `
-                               -Body $authBody
-$token = ($authResp.Content | ConvertFrom-Json).token
+function Get-SiteIQToken ([PSCredential]$Cred, [string]$Uri) {
+    $Body = @{ email = $Cred.UserName; password = $Cred.GetNetworkCredential().Password } |
+            ConvertTo-Json
+    try   { (Invoke-RestMethod -Uri "$Uri/api/web/auth/token" -Method Post -ContentType 'application/json' -Body $Body).token }
+    catch { throw "Authentication failed for '$($Cred.UserName)': $($_.Exception.Message)" }
+}
 
-$headers = @{ Authorization = "Bearer $token" }
+function Get-SiteIQTickets ([string]$Token, [string]$Uri, [hashtable]$Filter = @{}) {
+    $Headers  = @{ Authorization = "Bearer $Token" }
+    $PageSize = 1000
+    $Offset   = 0
+    do {
+        $Qs    = ($Filter + @{ pageLimit = $PageSize; pageOffset = $Offset }).GetEnumerator() |
+                 ForEach-Object { "$($_.Key)=$($_.Value)" }
+        $Batch = @(Invoke-RestMethod -Uri "$Uri/api/external/ticket?$($Qs -join '&')" -Headers $Headers)
+        $Batch
+        $Offset += $PageSize
+    } while ($Batch.Count -eq $PageSize)
+}
 
-# Paginate through all tickets
-$pageSize = 1000
-$offset   = 0
-$tickets  = [System.Collections.Generic.List[object]]::new()
+if (-not $Credential) {
+    $CredPath = Join-Path $HOME '.siteiq-cred.xml'
+    if (($env:OS -eq 'Windows_NT') -and (Test-Path $CredPath)) {
+        $Credential = Import-Clixml -Path $CredPath
+    } else {
+        $Credential = Get-Credential -Message 'Enter your Site-IQ credentials'
+        if ($env:OS -eq 'Windows_NT') { $Credential | Export-Clixml -Path $CredPath }
+    }
+}
 
-do {
-    $uri   = "$baseUri/api/external/ticket?status=All&pageLimit=$pageSize&pageOffset=$offset"
-    $resp  = Invoke-WebRequest -Uri $uri -Headers $headers
-    $batch = $resp.Content | ConvertFrom-Json
-    foreach ($t in $batch) { $tickets.Add($t) }
-    $offset += $pageSize
-} while ($batch.Count -eq $pageSize)
+$Token   = Get-SiteIQToken -Cred $Credential -Uri $BaseUri
+$Tickets = @(Get-SiteIQTickets -Token $Token -Uri $BaseUri -Filter @{ status = 'All' })
+Write-Verbose "Fetched $($Tickets.Count) tickets"
 
-# By component
-Write-Host 'Tickets by component:'
-$tickets |
-    Group-Object component |
-    Sort-Object Count -Descending |
-    Format-Table Count, Name -AutoSize
+$TodayStr = (Get-Date).ToString('yyyy-MM-dd')
 
-# Top 10 sites
-Write-Host 'Top 10 sites:'
-$tickets |
-    Group-Object siteName |
-    Sort-Object Count -Descending |
-    Select-Object -First 10 |
-    Format-Table Count, Name -AutoSize
-
-# Tickets with 3+ alerts
-$tickets |
-    Where-Object { @($_.alerts).Count -ge 3 } |
-    Format-Table ticketID, siteName, component, @{
-        Name       = 'Alerts'
-        Expression = { @($_.alerts).Count }
-    } -AutoSize
-
-# Opened today
-$todayStr    = (Get-Date).ToString('yyyy-MM-dd')
-$openedToday = $tickets | Where-Object { $_.ticketOpenTimestamp -like "$todayStr*" }
-Write-Host "Opened today: $(@($openedToday).Count)"
+# Output a structured object so the caller can work with each section independently
+[PSCustomObject]@{
+    ByComponent  = $Tickets | Group-Object component | Sort-Object Count -Descending
+    TopSites     = $Tickets | Group-Object siteName  | Sort-Object Count -Descending | Select-Object -First 10
+    HeavyTickets = @($Tickets | Where-Object { @($_.alerts).Count -ge 3 })
+    OpenedToday  = @($Tickets | Where-Object { $_.ticketOpenTimestamp -like "$TodayStr*" })
+}

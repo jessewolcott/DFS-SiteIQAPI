@@ -1,25 +1,35 @@
-# Simplest query — default status is InProgress using raw Invoke-WebRequest — no module required
-$baseUri = 'https://dfs.site-iq.com'
+#Requires -Version 5.1
+# Simplest query — default status is InProgress, default window 30 days — no module required
+[CmdletBinding()]
+param(
+    [PSCredential] $Credential,
+    [string]       $BaseUri = 'https://dfs.site-iq.com'
+)
 
-# Credentials
-$email    = Read-Host 'Site-IQ email'
-$password = Read-Host 'Password' -AsSecureString
-$plainPw  = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
-                [Runtime.InteropServices.Marshal]::SecureStringToBSTR($password))
+$ErrorActionPreference = 'Stop'
 
-# Authenticate
-$authBody = @{ email = $email; password = $plainPw } | ConvertTo-Json
-$authResp  = Invoke-WebRequest -Uri "$baseUri/api/web/auth/token" `
-                               -Method Post `
-                               -ContentType 'application/json' `
-                               -Body $authBody
-$token = ($authResp.Content | ConvertFrom-Json).token
+function Get-SiteIQToken ([PSCredential]$Cred, [string]$Uri) {
+    $Body = @{ email = $Cred.UserName; password = $Cred.GetNetworkCredential().Password } |
+            ConvertTo-Json
+    try   { (Invoke-RestMethod -Uri "$Uri/api/web/auth/token" -Method Post -ContentType 'application/json' -Body $Body).token }
+    catch { throw "Authentication failed for '$($Cred.UserName)': $($_.Exception.Message)" }
+}
 
-$headers = @{ Authorization = "Bearer $token" }
+if (-not $Credential) {
+    $CredPath = Join-Path $HOME '.siteiq-cred.xml'
+    if (($env:OS -eq 'Windows_NT') -and (Test-Path $CredPath)) {
+        $Credential = Import-Clixml -Path $CredPath
+    } else {
+        $Credential = Get-Credential -Message 'Enter your Site-IQ credentials'
+        if ($env:OS -eq 'Windows_NT') { $Credential | Export-Clixml -Path $CredPath }
+    }
+}
 
-# Fetch in-progress tickets (API default: status=InProgress, last 30 days)
-$resp    = Invoke-WebRequest -Uri "$baseUri/api/external/ticket" -Headers $headers
-$tickets = $resp.Content | ConvertFrom-Json
+$Token   = Get-SiteIQToken -Cred $Credential -Uri $BaseUri
+$Headers = @{ Authorization = "Bearer $Token" }
 
-Write-Host "Found $(@($tickets).Count) in-progress tickets"
-$tickets | Format-Table ticketID, siteName, component, ticketStatus -AutoSize
+# API defaults: status=InProgress, last 30 days — single page is sufficient for most sites
+$Tickets = @(Invoke-RestMethod -Uri "$BaseUri/api/external/ticket" -Headers $Headers)
+
+Write-Verbose "Found $($Tickets.Count) in-progress tickets"
+$Tickets

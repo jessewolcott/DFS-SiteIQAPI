@@ -1,51 +1,60 @@
-# Pull every alert across all tickets using raw Invoke-WebRequest — no module required
-$baseUri = 'https://dfs.site-iq.com'
+#Requires -Version 5.1
+# Pull every alert across all tickets and return a flat, sorted list — no module required
+[CmdletBinding()]
+param(
+    [PSCredential] $Credential,
+    [string]       $BaseUri = 'https://dfs.site-iq.com'
+)
 
-# Credentials
-$email    = Read-Host 'Site-IQ email'
-$password = Read-Host 'Password' -AsSecureString
-$plainPw  = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
-                [Runtime.InteropServices.Marshal]::SecureStringToBSTR($password))
+$ErrorActionPreference = 'Stop'
 
-# Authenticate
-$authBody = @{ email = $email; password = $plainPw } | ConvertTo-Json
-$authResp  = Invoke-WebRequest -Uri "$baseUri/api/web/auth/token" `
-                               -Method Post `
-                               -ContentType 'application/json' `
-                               -Body $authBody
-$token = ($authResp.Content | ConvertFrom-Json).token
+function Get-SiteIQToken ([PSCredential]$Cred, [string]$Uri) {
+    $Body = @{ email = $Cred.UserName; password = $Cred.GetNetworkCredential().Password } |
+            ConvertTo-Json
+    try   { (Invoke-RestMethod -Uri "$Uri/api/web/auth/token" -Method Post -ContentType 'application/json' -Body $Body).token }
+    catch { throw "Authentication failed for '$($Cred.UserName)': $($_.Exception.Message)" }
+}
 
-$headers = @{ Authorization = "Bearer $token" }
+function Get-SiteIQTickets ([string]$Token, [string]$Uri, [hashtable]$Filter = @{}) {
+    $Headers  = @{ Authorization = "Bearer $Token" }
+    $PageSize = 1000
+    $Offset   = 0
+    do {
+        $Qs    = ($Filter + @{ pageLimit = $PageSize; pageOffset = $Offset }).GetEnumerator() |
+                 ForEach-Object { "$($_.Key)=$($_.Value)" }
+        $Batch = @(Invoke-RestMethod -Uri "$Uri/api/external/ticket?$($Qs -join '&')" -Headers $Headers)
+        $Batch
+        $Offset += $PageSize
+    } while ($Batch.Count -eq $PageSize)
+}
 
-# Paginate through all tickets
-$pageSize = 1000
-$offset   = 0
-$tickets  = [System.Collections.Generic.List[object]]::new()
-
-do {
-    $uri   = "$baseUri/api/external/ticket?status=All&pageLimit=$pageSize&pageOffset=$offset"
-    $resp  = Invoke-WebRequest -Uri $uri -Headers $headers
-    $batch = $resp.Content | ConvertFrom-Json
-    foreach ($t in $batch) { $tickets.Add($t) }
-    $offset += $pageSize
-} while ($batch.Count -eq $pageSize)
-
-# Flatten all alerts
-$allAlerts = foreach ($t in $tickets) {
-    foreach ($a in $t.alerts) {
-        [PSCustomObject]@{
-            TicketID        = $t.ticketID
-            SiteName        = $t.siteName
-            Component       = $t.component
-            Dispenser       = $t.dispenser
-            Error           = $a.error
-            FuelingPosition = $a.fuelingPosition
-            AlertOpened     = $a.alertOpenTimestamp
-            AlertClosed     = $a.alertCloseTimestamp
-            StillOpen       = $null -eq $a.alertCloseTimestamp
-        }
+if (-not $Credential) {
+    $CredPath = Join-Path $HOME '.siteiq-cred.xml'
+    if (($env:OS -eq 'Windows_NT') -and (Test-Path $CredPath)) {
+        $Credential = Import-Clixml -Path $CredPath
+    } else {
+        $Credential = Get-Credential -Message 'Enter your Site-IQ credentials'
+        if ($env:OS -eq 'Windows_NT') { $Credential | Export-Clixml -Path $CredPath }
     }
 }
 
-Write-Host "Total alerts: $(@($allAlerts).Count)"
-$allAlerts | Sort-Object SiteName | Format-Table -AutoSize
+$Token   = Get-SiteIQToken -Cred $Credential -Uri $BaseUri
+$Tickets = @(Get-SiteIQTickets -Token $Token -Uri $BaseUri -Filter @{ status = 'All' })
+Write-Verbose "Fetched $($Tickets.Count) tickets"
+
+$Tickets | ForEach-Object {
+    $T = $_
+    $T.alerts | ForEach-Object {
+        [PSCustomObject]@{
+            TicketID        = $T.ticketID
+            SiteName        = $T.siteName
+            Component       = $T.component
+            Dispenser       = $T.dispenser
+            Error           = $_.error
+            FuelingPosition = $_.fuelingPosition
+            AlertOpened     = $_.alertOpenTimestamp
+            AlertClosed     = $_.alertCloseTimestamp
+            StillOpen       = $null -eq $_.alertCloseTimestamp
+        }
+    }
+} | Sort-Object SiteName

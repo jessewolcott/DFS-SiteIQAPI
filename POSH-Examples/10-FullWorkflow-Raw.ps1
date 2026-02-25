@@ -1,78 +1,72 @@
-# Weekly report: pull open + closed, summarize, export to CSV using raw Invoke-WebRequest — no module required
-$baseUri = 'https://dfs.site-iq.com'
+#Requires -Version 5.1
+# Weekly report: pull open + closed, summarize, export to CSV — no module required
+[CmdletBinding()]
+param(
+    [PSCredential] $Credential,
+    [string]       $BaseUri  = 'https://dfs.site-iq.com',
+    [string]       $OutDir   = $PSScriptRoot
+)
 
-# Credentials
-$email    = Read-Host 'Site-IQ email'
-$password = Read-Host 'Password' -AsSecureString
-$plainPw  = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
-                [Runtime.InteropServices.Marshal]::SecureStringToBSTR($password))
+$ErrorActionPreference = 'Stop'
 
-# Authenticate
-$authBody = @{ email = $email; password = $plainPw } | ConvertTo-Json
-$authResp  = Invoke-WebRequest -Uri "$baseUri/api/web/auth/token" `
-                               -Method Post `
-                               -ContentType 'application/json' `
-                               -Body $authBody
-$token = ($authResp.Content | ConvertFrom-Json).token
-
-if (-not $token) { Write-Error 'Failed to connect.'; exit 1 }
-
-$headers = @{ Authorization = "Bearer $token" }
-$weekAgo = (Get-Date).AddDays(-7).ToString('yyyy-MM-dd')
-
-# Helper: paginate a single status+startDate query
-function Get-AllPages ($status, $startDate) {
-    $pageSize = 1000
-    $offset   = 0
-    $result   = [System.Collections.Generic.List[object]]::new()
-    do {
-        $uri   = "$baseUri/api/external/ticket?status=$status&startDate=$startDate&pageLimit=$pageSize&pageOffset=$offset"
-        $resp  = Invoke-WebRequest -Uri $uri -Headers $headers
-        $batch = $resp.Content | ConvertFrom-Json
-        foreach ($t in $batch) { $result.Add($t) }
-        $offset += $pageSize
-    } while ($batch.Count -eq $pageSize)
-    return $result
+function Get-SiteIQToken ([PSCredential]$Cred, [string]$Uri) {
+    $Body = @{ email = $Cred.UserName; password = $Cred.GetNetworkCredential().Password } |
+            ConvertTo-Json
+    try   { (Invoke-RestMethod -Uri "$Uri/api/web/auth/token" -Method Post -ContentType 'application/json' -Body $Body).token }
+    catch { throw "Authentication failed for '$($Cred.UserName)': $($_.Exception.Message)" }
 }
 
-$open   = Get-AllPages 'InProgress' $weekAgo
-$closed = Get-AllPages 'Closed'     $weekAgo
+function Get-SiteIQTickets ([string]$Token, [string]$Uri, [hashtable]$Filter = @{}) {
+    $Headers  = @{ Authorization = "Bearer $Token" }
+    $PageSize = 1000
+    $Offset   = 0
+    do {
+        $Qs    = ($Filter + @{ pageLimit = $PageSize; pageOffset = $Offset }).GetEnumerator() |
+                 ForEach-Object { "$($_.Key)=$($_.Value)" }
+        $Batch = @(Invoke-RestMethod -Uri "$Uri/api/external/ticket?$($Qs -join '&')" -Headers $Headers)
+        $Batch
+        $Offset += $PageSize
+    } while ($Batch.Count -eq $PageSize)
+}
 
-Write-Host "Last 7 days — Open: $($open.Count), Closed: $($closed.Count)"
-
-$all = [System.Collections.Generic.List[object]]::new()
-foreach ($t in @($open) + @($closed)) { $all.Add($t) }
-
-$report = foreach ($t in $all) {
-    [PSCustomObject]@{
-        TicketID   = $t.ticketID
-        Site       = $t.siteName
-        SiteID     = $t.siteID
-        Address    = $t.address
-        Status     = $t.ticketStatus
-        Component  = $t.component
-        Dispenser  = $t.dispenser
-        Warranty   = $t.warrantyStatus
-        Opened     = $t.ticketOpenTimestamp
-        AlertCount = @($t.alerts).Count
-        FirstAlert = ($t.alerts | Select-Object -First 1).error
+if (-not $Credential) {
+    $CredPath = Join-Path $HOME '.siteiq-cred.xml'
+    if (($env:OS -eq 'Windows_NT') -and (Test-Path $CredPath)) {
+        $Credential = Import-Clixml -Path $CredPath
+    } else {
+        $Credential = Get-Credential -Message 'Enter your Site-IQ credentials'
+        if ($env:OS -eq 'Windows_NT') { $Credential | Export-Clixml -Path $CredPath }
     }
 }
 
-Write-Host 'Top 5 sites by volume:'
-$report |
-    Group-Object Site |
-    Sort-Object Count -Descending |
-    Select-Object -First 5 |
-    Format-Table Count, Name -AutoSize
+$Token   = Get-SiteIQToken -Cred $Credential -Uri $BaseUri
+$WeekAgo = (Get-Date).AddDays(-7).ToString('yyyy-MM-dd')
 
-Write-Host 'By component:'
-$report |
-    Group-Object Component |
-    Sort-Object Count -Descending |
-    Format-Table Count, Name -AutoSize
+$Open   = @(Get-SiteIQTickets -Token $Token -Uri $BaseUri -Filter @{ status = 'InProgress'; startDate = $WeekAgo })
+$Closed = @(Get-SiteIQTickets -Token $Token -Uri $BaseUri -Filter @{ status = 'Closed';     startDate = $WeekAgo })
 
-$timestamp = (Get-Date).ToString('yyyy-MM-dd_HHmmss')
-$csvPath   = Join-Path $PSScriptRoot "WeeklyReport_$timestamp.csv"
-$report | Export-Csv -Path $csvPath -NoTypeInformation
-Write-Host "Saved to $csvPath"
+Write-Verbose "Last 7 days — Open: $($Open.Count), Closed: $($Closed.Count)"
+
+$Report = ($Open + $Closed) | ForEach-Object {
+    $Alerts = @($_.alerts)
+    [PSCustomObject]@{
+        TicketID   = $_.ticketID
+        Site       = $_.siteName
+        SiteID     = $_.siteID
+        Address    = $_.address
+        Status     = $_.ticketStatus
+        Component  = $_.component
+        Dispenser  = $_.dispenser
+        Warranty   = $_.warrantyStatus
+        Opened     = $_.ticketOpenTimestamp
+        AlertCount = $Alerts.Count
+        FirstAlert = $Alerts[0].error
+    }
+}
+
+$Timestamp = (Get-Date).ToString('yyyy-MM-dd_HHmmss')
+$CsvPath   = Join-Path $OutDir "WeeklyReport_$Timestamp.csv"
+$Report | Export-Csv -Path $CsvPath -NoTypeInformation
+Write-Verbose "Saved $(@($Report).Count) rows to $CsvPath"
+
+$Report

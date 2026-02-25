@@ -1,44 +1,52 @@
-# Incremental sync using epoch timestamps using raw Invoke-WebRequest — no module required
-# Good for scheduled jobs that only need what changed since last run.
-$baseUri = 'https://dfs.site-iq.com'
+#Requires -Version 5.1
+# Incremental sync using epoch timestamps — good for scheduled jobs — no module required
+[CmdletBinding()]
+param(
+    [PSCredential] $Credential,
+    [string]       $BaseUri   = 'https://dfs.site-iq.com',
+    [long]         $Delta     = [long]([datetime]'2025-08-01T00:00:00Z' - [datetime]'1970-01-01T00:00:00Z').TotalSeconds
+)
 
-# Credentials
-$email    = Read-Host 'Site-IQ email'
-$password = Read-Host 'Password' -AsSecureString
-$plainPw  = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
-                [Runtime.InteropServices.Marshal]::SecureStringToBSTR($password))
+$ErrorActionPreference = 'Stop'
 
-# Authenticate
-$authBody = @{ email = $email; password = $plainPw } | ConvertTo-Json
-$authResp  = Invoke-WebRequest -Uri "$baseUri/api/web/auth/token" `
-                               -Method Post `
-                               -ContentType 'application/json' `
-                               -Body $authBody
-$token = ($authResp.Content | ConvertFrom-Json).token
+function Get-SiteIQToken ([PSCredential]$Cred, [string]$Uri) {
+    $Body = @{ email = $Cred.UserName; password = $Cred.GetNetworkCredential().Password } |
+            ConvertTo-Json
+    try   { (Invoke-RestMethod -Uri "$Uri/api/web/auth/token" -Method Post -ContentType 'application/json' -Body $Body).token }
+    catch { throw "Authentication failed for '$($Cred.UserName)': $($_.Exception.Message)" }
+}
 
-$headers = @{ Authorization = "Bearer $token" }
+function Get-SiteIQTickets ([string]$Token, [string]$Uri, [hashtable]$Filter = @{}) {
+    $Headers  = @{ Authorization = "Bearer $Token" }
+    $PageSize = 1000
+    $Offset   = 0
+    do {
+        $Qs    = ($Filter + @{ pageLimit = $PageSize; pageOffset = $Offset }).GetEnumerator() |
+                 ForEach-Object { "$($_.Key)=$($_.Value)" }
+        $Batch = @(Invoke-RestMethod -Uri "$Uri/api/external/ticket?$($Qs -join '&')" -Headers $Headers)
+        $Batch
+        $Offset += $PageSize
+    } while ($Batch.Count -eq $PageSize)
+}
 
-$lastSync = [datetime]'2025-08-01T00:00:00Z'
-$epoch    = [long]($lastSync - [datetime]'1970-01-01T00:00:00Z').TotalSeconds
+if (-not $Credential) {
+    $CredPath = Join-Path $HOME '.siteiq-cred.xml'
+    if (($env:OS -eq 'Windows_NT') -and (Test-Path $CredPath)) {
+        $Credential = Import-Clixml -Path $CredPath
+    } else {
+        $Credential = Get-Credential -Message 'Enter your Site-IQ credentials'
+        if ($env:OS -eq 'Windows_NT') { $Credential | Export-Clixml -Path $CredPath }
+    }
+}
 
-Write-Host "Fetching changes since $lastSync (epoch $epoch)"
+Write-Verbose "Fetching changes since epoch $Delta"
 
-# Paginate through all changed tickets
-$pageSize = 1000
-$offset   = 0
-$changed  = [System.Collections.Generic.List[object]]::new()
+$Token   = Get-SiteIQToken -Cred $Credential -Uri $BaseUri
+$Changed = @(Get-SiteIQTickets -Token $Token -Uri $BaseUri -Filter @{ status = 'All'; delta = $Delta })
 
-do {
-    $uri   = "$baseUri/api/external/ticket?status=All&delta=$epoch&pageLimit=$pageSize&pageOffset=$offset"
-    $resp  = Invoke-WebRequest -Uri $uri -Headers $headers
-    $batch = $resp.Content | ConvertFrom-Json
-    foreach ($t in $batch) { $changed.Add($t) }
-    $offset += $pageSize
-} while ($batch.Count -eq $pageSize)
+Write-Verbose "Got $($Changed.Count) tickets"
 
-Write-Host "Got $($changed.Count) tickets"
-$changed | Format-Table ticketID, siteName, ticketStatus, component
+$NextDelta = [long]([datetime]::UtcNow - [datetime]'1970-01-01T00:00:00Z').TotalSeconds
+Write-Verbose "Next run, use -Delta $NextDelta"
 
-# Save current time as the next delta marker
-$nextDelta = [long]([datetime]::UtcNow - [datetime]'1970-01-01T00:00:00Z').TotalSeconds
-Write-Host "Next run, use delta=$nextDelta"
+$Changed

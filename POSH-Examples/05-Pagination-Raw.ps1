@@ -1,34 +1,42 @@
-# Manual pagination loop using raw Invoke-WebRequest — no module required
-$baseUri = 'https://dfs.site-iq.com'
+#Requires -Version 5.1
+# Manual pagination loop — no module required
+[CmdletBinding()]
+param(
+    [PSCredential] $Credential,
+    [string]       $BaseUri   = 'https://dfs.site-iq.com',
+    [int]          $PageSize  = 50
+)
 
-# Credentials
-$email    = Read-Host 'Site-IQ email'
-$password = Read-Host 'Password' -AsSecureString
-$plainPw  = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
-                [Runtime.InteropServices.Marshal]::SecureStringToBSTR($password))
+$ErrorActionPreference = 'Stop'
 
-# Authenticate
-$authBody = @{ email = $email; password = $plainPw } | ConvertTo-Json
-$authResp  = Invoke-WebRequest -Uri "$baseUri/api/web/auth/token" `
-                               -Method Post `
-                               -ContentType 'application/json' `
-                               -Body $authBody
-$token = ($authResp.Content | ConvertFrom-Json).token
+function Get-SiteIQToken ([PSCredential]$Cred, [string]$Uri) {
+    $Body = @{ email = $Cred.UserName; password = $Cred.GetNetworkCredential().Password } |
+            ConvertTo-Json
+    try   { (Invoke-RestMethod -Uri "$Uri/api/web/auth/token" -Method Post -ContentType 'application/json' -Body $Body).token }
+    catch { throw "Authentication failed for '$($Cred.UserName)': $($_.Exception.Message)" }
+}
 
-$headers = @{ Authorization = "Bearer $token" }
+if (-not $Credential) {
+    $CredPath = Join-Path $HOME '.siteiq-cred.xml'
+    if (($env:OS -eq 'Windows_NT') -and (Test-Path $CredPath)) {
+        $Credential = Import-Clixml -Path $CredPath
+    } else {
+        $Credential = Get-Credential -Message 'Enter your Site-IQ credentials'
+        if ($env:OS -eq 'Windows_NT') { $Credential | Export-Clixml -Path $CredPath }
+    }
+}
 
-# Manual: 50 at a time
-$pageSize = 50
-$offset   = 0
-$all      = [System.Collections.Generic.List[object]]::new()
+$Token   = Get-SiteIQToken -Cred $Credential -Uri $BaseUri
+$Headers = @{ Authorization = "Bearer $Token" }
+$All     = [System.Collections.Generic.List[object]]::new()
+$Offset  = 0
 
 do {
-    $uri   = "$baseUri/api/external/ticket?status=All&pageLimit=$pageSize&pageOffset=$offset"
-    $resp  = Invoke-WebRequest -Uri $uri -Headers $headers
-    $batch = $resp.Content | ConvertFrom-Json
-    foreach ($ticket in $batch) { $all.Add($ticket) }
-    Write-Host "  Offset ${offset}: got $($batch.Count)"
-    $offset += $pageSize
-} while ($batch.Count -eq $pageSize)
+    $Batch = @(Invoke-RestMethod -Uri "$BaseUri/api/external/ticket?status=All&pageLimit=$PageSize&pageOffset=$Offset" -Headers $Headers)
+    foreach ($Ticket in $Batch) { $All.Add($Ticket) }
+    Write-Verbose "  Offset $Offset : got $($Batch.Count)"
+    $Offset += $PageSize
+} while ($Batch.Count -eq $PageSize)
 
-Write-Host "Total: $($all.Count) tickets"
+Write-Verbose "Total: $($All.Count) tickets"
+$All

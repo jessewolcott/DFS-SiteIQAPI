@@ -1,33 +1,34 @@
-# Non-interactive auth using an encrypted credential file with raw Invoke-WebRequest — no module required
-# On Windows the xml is encrypted with DPAPI (tied to your user + machine); on macOS/Linux credentials are prompted each run.
-$baseUri  = 'https://dfs.site-iq.com'
-$credPath = Join-Path $HOME '.siteiq-cred.xml'
+#Requires -Version 5.1
+# Non-interactive auth via DPAPI credential file — no module required
+# Windows: encrypted with DPAPI (user + machine bound). macOS/Linux: prompts each run.
+[CmdletBinding()]
+param(
+    [string] $BaseUri  = 'https://dfs.site-iq.com',
+    [string] $StorePath = (Join-Path $HOME '.siteiq-cred.xml')
+)
 
-if (($IsWindows -or $PSEdition -eq 'Desktop') -and (Test-Path $credPath)) {
-    $cred = Import-Clixml -Path $credPath
+$ErrorActionPreference = 'Stop'
+
+function Get-SiteIQToken ([PSCredential]$Cred, [string]$Uri) {
+    $Body = @{ email = $Cred.UserName; password = $Cred.GetNetworkCredential().Password } |
+            ConvertTo-Json
+    try   { (Invoke-RestMethod -Uri "$Uri/api/web/auth/token" -Method Post -ContentType 'application/json' -Body $Body).token }
+    catch { throw "Authentication failed for '$($Cred.UserName)': $($_.Exception.Message)" }
+}
+
+if (($env:OS -eq 'Windows_NT') -and (Test-Path $StorePath)) {
+    $Credential = Import-Clixml -Path $StorePath
 } else {
-    $cred = Get-Credential -Message 'Enter your Site-IQ credentials'
-    if ($IsWindows -or $PSEdition -eq 'Desktop') {
-        $cred | Export-Clixml -Path $credPath
-        Write-Host "Credential saved to $credPath"
+    $Credential = Get-Credential -Message 'Enter your Site-IQ credentials'
+    if ($env:OS -eq 'Windows_NT') {
+        $Credential | Export-Clixml -Path $StorePath
+        Write-Verbose "Credential saved to $StorePath"
     }
 }
 
-$plainPw = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
-               [Runtime.InteropServices.Marshal]::SecureStringToBSTR($cred.Password))
+$Token   = Get-SiteIQToken -Cred $Credential -Uri $BaseUri
+$Headers = @{ Authorization = "Bearer $Token" }
 
-# Authenticate
-$authBody = @{ email = $cred.UserName; password = $plainPw } | ConvertTo-Json
-$authResp  = Invoke-WebRequest -Uri "$baseUri/api/web/auth/token" `
-                               -Method Post `
-                               -ContentType 'application/json' `
-                               -Body $authBody
-$token = ($authResp.Content | ConvertFrom-Json).token
-
-$headers = @{ Authorization = "Bearer $token" }
-
-# Fetch in-progress tickets
-$resp    = Invoke-WebRequest -Uri "$baseUri/api/external/ticket" -Headers $headers
-$tickets = $resp.Content | ConvertFrom-Json
-
-Write-Host "Got $(@($tickets).Count) in-progress tickets"
+$Tickets = @(Invoke-RestMethod -Uri "$BaseUri/api/external/ticket" -Headers $Headers)
+Write-Verbose "Got $($Tickets.Count) in-progress tickets"
+$Tickets
